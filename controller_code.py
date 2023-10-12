@@ -22,6 +22,7 @@ default_vars = {
     "default_temp_control": True,
     "default_temp_safe_threshold": 60,
     "default_power_state": True,
+    "default_beep_en": True,
 }
 
 # Define variables
@@ -29,6 +30,7 @@ current_speed = None
 temp_control = None
 temp_safe_threshold = None
 power_state = None
+beep_en = True
 first_boot = None
 init_done = False
 
@@ -46,7 +48,7 @@ for relay in relays:
 
 aux_relay = digitalio.DigitalInOut(aux_pin)
 aux_relay.direction = digitalio.Direction.OUTPUT
-aux_relay.value = False # Aux relay is off when high.
+aux_relay.value = True # Aux relay is off when high.
 
 buttons = [digitalio.DigitalInOut(pin) for pin in buttons_pins]
 for button in buttons:
@@ -57,8 +59,9 @@ for button in buttons:
 i2c = busio.I2C(display_i2c_pins['scl'], display_i2c_pins['sda'])
 display = adafruit_ssd1306.SSD1306_I2C(128, 32, i2c)
 
-def beep():
-    simpleio.tone(beep_pin, 440, duration=0.1)
+async def beep():
+    if beep_en:
+        simpleio.tone(beep_pin, 440, duration=0.1)
 
 def increment_speed():
     global current_speed
@@ -66,8 +69,8 @@ def increment_speed():
         current_speed += 1
         update_relays()
         update_display()
-        beep()
-        time.sleep(0.05)
+        asyncio.run(beep())
+        time.sleep(0.01)
         asyncio.run(save_settings())
         return True
     return False
@@ -78,8 +81,8 @@ def decrement_speed():
         current_speed -= 1
         update_relays()
         update_display()
-        beep()
-        time.sleep(0.05)
+        asyncio.run(beep())
+        time.sleep(0.01)
         asyncio.run(save_settings())
         return True
     return False
@@ -113,6 +116,9 @@ def update_display():
     # Display message on the right half of the screen.
     display.text("Power:" + ("ON" if power_state else "OFF"), 68, 0, 1)
     
+    # Display beep status on the right half of the screen.
+    display.text("Beep:" + ("ON" if beep_en else "OFF"), 68, 10, 1)
+    
     # Update the display.
     display.show()
 
@@ -128,11 +134,12 @@ def config_init():
     temp_control = default_vars["default_temp_control"]
     temp_safe_threshold = default_vars["default_temp_safe_threshold"]
     power_state = default_vars["default_power_state"]
+    beep_en = default_vars["default_beep_en"]
     
     asyncio.run(save_settings())
 
 def load_settings():
-    global current_speed, temp_control, temp_safe_threshold, power_state
+    global current_speed, temp_control, temp_safe_threshold, power_state, beep_en
     
     with open('settings.json', 'r') as f:
         settings_data = json.load(f)
@@ -141,6 +148,7 @@ def load_settings():
         temp_control = settings_data["temp_control"]
         temp_safe_threshold = settings_data["temp_safe_threshold"]
         power_state = settings_data["power_state"]
+        beep_en = settings_data["beep_en"]
 
 async def save_settings():
     settings_data = {
@@ -148,10 +156,25 @@ async def save_settings():
         "temp_control": temp_control,
         "temp_safe_threshold": temp_safe_threshold,
         "power_state": power_state,
+        "beep_en": beep_en,
     }
     
     with open('settings.json', 'w') as f:
         json.dump(settings_data, f)
+
+def power_toggle():
+    global power_state
+    power_state = not power_state
+    update_display()
+    update_relays()
+    asyncio.run(save_settings())
+
+def beep_toggle():
+    global beep_en
+    beep_en = not beep_en
+    if beep_en:
+        asyncio.run(beep())
+    update_display()
 
 def init_controller():
     global init_done, first_boot
@@ -162,7 +185,7 @@ def init_controller():
         
         load_settings()
         
-        beep()
+        asyncio.run(beep())
         
         # Display initialization message.
         display.fill(0)
@@ -185,6 +208,15 @@ def main():
 
         if not buttons[1].value: # If button GP7 was pressed.
             increment_speed()
+
+        if not buttons[3].value: # If button GP9 was pressed.
+            start_time = time.monotonic()
+            while not buttons[3].value: # While button GP9 is still being pressed.
+                if time.monotonic() - start_time > 0.5: # If button GP9 has been held down for more than 0.5 seconds.
+                    beep_toggle()
+                    break
+            else: # If button GP9 was released before 2 seconds.
+                power_toggle()
 
 # Check for the existence of settings.json.
 try:
