@@ -6,6 +6,7 @@ import simpleio
 import time
 import json
 import os
+import asyncio
 
 # Define pins
 relay_pins = [board.GP18, board.GP17, board.GP16]
@@ -67,7 +68,7 @@ def increment_speed():
         update_display()
         beep()
         time.sleep(0.05)
-        save_settings()
+        asyncio.run(save_settings())
         return True
     return False
 
@@ -79,7 +80,7 @@ def decrement_speed():
         update_display()
         beep()
         time.sleep(0.05)
-        save_settings()
+        asyncio.run(save_settings())
         return True
     return False
 
@@ -128,7 +129,7 @@ def config_init():
     temp_safe_threshold = default_vars["default_temp_safe_threshold"]
     power_state = default_vars["default_power_state"]
     
-    save_settings()
+    asyncio.run(save_settings())
 
 def load_settings():
     global current_speed, temp_control, temp_safe_threshold, power_state
@@ -141,7 +142,7 @@ def load_settings():
         temp_safe_threshold = settings_data["temp_safe_threshold"]
         power_state = settings_data["power_state"]
 
-def save_settings():
+async def save_settings():
     settings_data = {
         "current_speed": current_speed,
         "temp_control": temp_control,
