@@ -36,7 +36,7 @@ ir_pin = board.GP2
 default_vars = {
     "default_current_speed": 1,
     "default_temp_control": True,
-    "default_temp_safe_threshold": 60,
+    "default_temp_safe_threshold": 85,
     "default_power_state": True,
     "default_beep_en": True,
 }
@@ -93,12 +93,23 @@ credits_button = digitalio.DigitalInOut(credits_pin)
 credits_button.direction = digitalio.Direction.INPUT
 credits_button.pull = digitalio.Pull.UP
 
+# Inform the user through a long beep if an error has ocurred
+def error_alert():
+    while True:
+        simpleio.tone(beep_pin, 440, duration=1)
+        time.sleep(1)
+        print("ERROR: Error alert triggered!")
+
 # Initialize display
-i2c = busio.I2C(display_i2c_pins['scl'], display_i2c_pins['sda'])
+try:
+    i2c = busio.I2C(display_i2c_pins['scl'], display_i2c_pins['sda'])
+except RuntimeError:
+    error_alert()
+
 display = adafruit_ssd1306.SSD1306_I2C(128, 32, i2c)
 
 # Setup IR receiver
-pulsein = pulseio.PulseIn(ir_pin, maxlen=120, idle_state=True)
+pulsein = pulseio.PulseIn(ir_pin, maxlen=200, idle_state=True)
 decoder = adafruit_irremote.GenericDecode()
 
 key_codes = {
@@ -259,77 +270,95 @@ async def update_temp():
 
 ## Display update code
 def update_display():
-    # Clear the display.
-    display.fill(0)
-    
-    # Display messages on the left half of the screen.
-    display.text("Speed:" + speed_messages[current_speed - 1], 0, 0, 1)
-    display.text("Tcon:" + ("ON" if temp_control else "OFF"), 0, 12, 1)
-    
-    if panic_state:
-        display.text("Temp:" + str(current_temp) + "C !", 0, 24, 1)
-    else:
-        display.text("Temp:" + str(current_temp) + "C", 0, 24, 1)
-    
-    # Draw a dividing line.
-    display.line(64, 0, 64, display.height - 1, 1)
-    
-    # Display message on the right half of the screen.
-    display.text("Power:" + ("ON" if power_state else "OFF"), 68, 0, 1)
-    
-    # Display beep status on the right half of the screen.
-    display.text("Beep:" + ("ON" if beep_en else "OFF"), 68, 12, 1)
-    
-    # Update the display.
-    display.show()
-    
+    try:
+        # Clear the display.
+        display.fill(0)
+        
+        # Display messages on the left half of the screen.
+        display.text("Speed:" + speed_messages[current_speed - 1], 0, 0, 1)
+        display.text("Tcon:" + ("ON" if temp_control else "OFF"), 0, 12, 1)
+        
+        if panic_state:
+            display.text("Temp:" + str(current_temp) + "C !", 0, 24, 1)
+        else:
+            display.text("Temp:" + str(current_temp) + "C", 0, 24, 1)
+        
+        # Draw a dividing line.
+        display.line(64, 0, 64, display.height - 1, 1)
+        
+        # Display message on the right half of the screen.
+        display.text("Power:" + ("ON" if power_state else "OFF"), 68, 0, 1)
+        
+        # Display beep status on the right half of the screen.
+        display.text("Beep:" + ("ON" if beep_en else "OFF"), 68, 12, 1)
+        
+        # Update the display.
+        display.show()
+    except OSError:
+        error_alert()
+        
 def update_display_temp():
-    # Clear the line that shows the temperature value.
-    display.fill_rect(0, 24, 50, 8, 0)
-    
-    if panic_state:
-        display.text("Temp:" + str(current_temp) + "C !", 0, 24, 1)
-    else:
-        display.text("Temp:" + str(current_temp) + "C", 0, 24, 1)
-    
-    # Update the display.
-    display.show()
+    try:
+        # Clear the line that shows the temperature value.
+        display.fill_rect(0, 24, 50, 8, 0)
+        
+        if panic_state:
+            display.text("Temp:" + str(current_temp) + "C !", 0, 24, 1)
+        else:
+            display.text("Temp:" + str(current_temp) + "C", 0, 24, 1)
+        
+        # Update the display.
+        display.show()
+    except OSError:
+        error_alert()
             
 def update_display_speed():
-    # Clear the line that shows the speed value.
-    display.fill_rect(0, 0, 60, 8, 0)
-    
-    display.text("Speed:" + speed_messages[current_speed - 1], 0, 0, 1)
-    
-    # Update the display.
-    display.show()
+    try:
+        # Clear the line that shows the speed value.
+        display.fill_rect(0, 0, 60, 8, 0)
+        
+        display.text("Speed:" + speed_messages[current_speed - 1], 0, 0, 1)
+        
+        # Update the display.
+        display.show()
+    except OSError:
+        error_alert()
         
 def update_display_tcon():
-    # Clear the line that shows the TCON state.
-    display.fill_rect(0, 12, 60, 8, 0)
-    
-    display.text("Tcon:" + ("ON" if temp_control else "OFF"), 0, 12, 1)
-    
-    # Update the display.
-    display.show()
+    try:
+        # Clear the line that shows the TCON state.
+        display.fill_rect(0, 12, 60, 8, 0)
+        
+        display.text("Tcon:" + ("ON" if temp_control else "OFF"), 0, 12, 1)
+        
+        # Update the display.
+        display.show()
+    except OSError:
+        error_alert()
     
 def update_display_power():
-    # Clear the line that shows the power state.
-    display.fill_rect(68, 0, 60, 8, 0)
-    
-    display.text("Power:" + ("ON" if power_state else "OFF"), 68, 0, 1)
-    
-    # Update the display.
-    display.show()
+    try:
+        # Clear the line that shows the power state.
+        display.fill_rect(68, 0, 60, 8, 0)
+        
+        display.text("Power:" + ("ON" if power_state else "OFF"), 68, 0, 1)
+        
+        # Update the display.
+        display.show()
+    except OSError:
+        error_alert()
     
 def update_display_beep():
-    # Clear the line that shows the beeper state.
-    display.fill_rect(68, 12, 60, 8, 0)
-    
-    display.text("Beep:" + ("ON" if beep_en else "OFF"), 68, 12, 1)
-    
-    # Update the display.
-    display.show()
+    try:
+        # Clear the line that shows the beeper state.
+        display.fill_rect(68, 12, 60, 8, 0)
+        
+        display.text("Beep:" + ("ON" if beep_en else "OFF"), 68, 12, 1)
+        
+        # Update the display.
+        display.show()
+    except OSError:
+        error_alert()
 
 # Credits easter egg
 def credits():
