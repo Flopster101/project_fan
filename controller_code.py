@@ -36,7 +36,7 @@ ir_pin = board.GP2
 default_vars = {
     "default_current_speed": 1,
     "default_temp_control": True,
-    "default_temp_safe_threshold": 85,
+    "default_temp_safe_threshold": 95,
     "default_power_state": True,
     "default_beep_en": True,
 }
@@ -55,7 +55,7 @@ init_done = False
 current_temp = 0
 
 # Define speed messages globally
-speed_messages = ["Low", "Mid", "High"]
+speed_messages = ["LOW", "MID", "HIGH"]
 
 # Initialize relays and buttons
 relays = [digitalio.DigitalInOut(pin) for pin in relay_pins]
@@ -121,7 +121,7 @@ key_codes = {
     "ZERO": {"code": 0xef11f708, "function": lambda: beep_toggle()},
     "MUTE": {"code": 0xef113bc4, "function": lambda: beep_toggle()},
     "INFO": {"code": 0xef117f80, "function": lambda: credits()},
-    "SIGNAL": {"code": 0xef119b64, "function": lambda: tcon_toggle()},
+    "SIGNAL": {"code": 0xef119b64, "function": lambda: tfuse_toggle()},
     "UP_ARROW": {"code": 0xef115fa0, "function": lambda: increment_speed()},
     "DOWN_ARROW": {"code": 0xef119f60, "function": lambda: decrement_speed()},
     "LEFT_ARROW": {"code": 0xef111fe0, "function": lambda: decrement_speed()},
@@ -267,30 +267,34 @@ async def update_temp():
         
         if temp_control:
             panic_temp()
+            
+    if current_temp <= temp_safe_threshold:
+        panic_state = False
 
 ## Display update code
 def update_display():
     try:
+        display.contrast(255)
         # Clear the display.
         display.fill(0)
         
         # Display messages on the left half of the screen.
-        display.text("Speed:" + speed_messages[current_speed - 1], 0, 0, 1)
-        display.text("Tcon:" + ("ON" if temp_control else "OFF"), 0, 12, 1)
+        display.text("SPEED:" + speed_messages[current_speed - 1], 0, 0, 1)
+        display.text("TFUSE:" + ("ON" if temp_control else "OFF"), 0, 12, 1)
         
         if panic_state:
-            display.text("Temp:" + str(current_temp) + "C !", 0, 24, 1)
+            display.text("TEMP:" + str(current_temp) + "C !", 0, 24, 1)
         else:
-            display.text("Temp:" + str(current_temp) + "C", 0, 24, 1)
+            display.text("TEMP:" + str(current_temp) + "C", 0, 24, 1)
         
         # Draw a dividing line.
         display.line(64, 0, 64, display.height - 1, 1)
         
         # Display message on the right half of the screen.
-        display.text("Power:" + ("ON" if power_state else "OFF"), 68, 0, 1)
+        display.text("POWER:" + ("ON" if power_state else "OFF"), 68, 6, 1)
         
         # Display beep status on the right half of the screen.
-        display.text("Beep:" + ("ON" if beep_en else "OFF"), 68, 12, 1)
+        display.text("BEEP:" + ("ON" if beep_en else "OFF"), 68, 18, 1)
         
         # Update the display.
         display.show()
@@ -303,9 +307,9 @@ def update_display_temp():
         display.fill_rect(0, 24, 50, 8, 0)
         
         if panic_state:
-            display.text("Temp:" + str(current_temp) + "C !", 0, 24, 1)
+            display.text("TEMP:" + str(current_temp) + "C !", 0, 24, 1)
         else:
-            display.text("Temp:" + str(current_temp) + "C", 0, 24, 1)
+            display.text("TEMP:" + str(current_temp) + "C", 0, 24, 1)
         
         # Update the display.
         display.show()
@@ -314,22 +318,24 @@ def update_display_temp():
             
 def update_display_speed():
     try:
+        display.contrast(255)
         # Clear the line that shows the speed value.
         display.fill_rect(0, 0, 60, 8, 0)
         
-        display.text("Speed:" + speed_messages[current_speed - 1], 0, 0, 1)
+        display.text("SPEED:" + speed_messages[current_speed - 1], 0, 0, 1)
         
         # Update the display.
         display.show()
     except OSError:
         error_alert()
         
-def update_display_tcon():
+def update_display_tfuse():
     try:
-        # Clear the line that shows the TCON state.
+        display.contrast(255)
+        # Clear the line that shows the TFUSE state.
         display.fill_rect(0, 12, 60, 8, 0)
         
-        display.text("Tcon:" + ("ON" if temp_control else "OFF"), 0, 12, 1)
+        display.text("TFUSE:" + ("ON" if temp_control else "OFF"), 0, 12, 1)
         
         # Update the display.
         display.show()
@@ -338,10 +344,11 @@ def update_display_tcon():
     
 def update_display_power():
     try:
+        display.contrast(255)
         # Clear the line that shows the power state.
-        display.fill_rect(68, 0, 60, 8, 0)
+        display.fill_rect(68, 6, 60, 8, 0)
         
-        display.text("Power:" + ("ON" if power_state else "OFF"), 68, 0, 1)
+        display.text("POWER:" + ("ON" if power_state else "OFF"), 68, 6, 1)
         
         # Update the display.
         display.show()
@@ -351,9 +358,9 @@ def update_display_power():
 def update_display_beep():
     try:
         # Clear the line that shows the beeper state.
-        display.fill_rect(68, 12, 60, 8, 0)
+        display.fill_rect(68, 18, 60, 8, 0)
         
-        display.text("Beep:" + ("ON" if beep_en else "OFF"), 68, 12, 1)
+        display.text("BEEP:" + ("ON" if beep_en else "OFF"), 68, 18, 1)
         
         # Update the display.
         display.show()
@@ -389,12 +396,12 @@ def power_toggle():
     update_relays()
 
 # Toggle temperature control
-def tcon_toggle():
+def tfuse_toggle():
     global temp_control
     temp_control = not temp_control
     beep()
     print(f"INFO: temp control status set to {temp_control}")
-    update_display_tcon()
+    update_display_tfuse()
     
 # Reset device and configuration
 def reset():
@@ -444,6 +451,7 @@ def main():
     button2_press_time = 0
     last_temp_update = time.monotonic()
     last_save = time.monotonic()
+    last_interaction = time.monotonic()
     last_num_pulses = len(pulsein)
 
     while True:
@@ -461,33 +469,41 @@ def main():
         if debouncer_0.fell:
             decrement_speed()
             print("INFO: gp6 press")
+            last_interaction = current_time
             time.sleep(0.05)
+            save_settings()
             
         ## Button 1  (speed increase)
         if debouncer_1.fell:
             increment_speed()
             print("INFO: gp7 press")
+            last_interaction = current_time
             time.sleep(0.05)
+            save_settings()
             
-        ## Button 2 (reset/tcon toggle)
+        ## Button 2 (reset/tfuse toggle)
         if not button_2.value:  # Button is pressed
             print("INFO: gp8 press")
+            last_interaction = current_time
             if button2_press_time == 0:
                 button2_press_time = time.monotonic()
             elif time.monotonic() - button2_press_time > 1:  # Button held for > 1 second
-                tcon_toggle()
+                tfuse_toggle()
                 button2_press_time = 0
                 while not button_2.value:
                     pass
                 time.sleep(0.1)
+                save_settings()
         else:  # Button is not pressed
             if button2_press_time != 0:
                 reset()
                 button2_press_time = 0
+                save_settings()
             
         ## Button 3 (power/beep toggle)
         if not button_3.value:  # Button is pressed
             print("INFO: gp9 press")
+            last_interaction = current_time
             if button3_press_time == 0:
                 button3_press_time = time.monotonic()
             elif time.monotonic() - button3_press_time > 1:  # Button held for > 1 second
@@ -496,10 +512,12 @@ def main():
                 while not button_3.value:
                     pass
                 time.sleep(0.1)
+                save_settings()
         else:  # Button is not pressed
             if button3_press_time != 0:
                 power_toggle()
                 button3_press_time = 0
+                save_settings()
         
         if num_pulses > last_num_pulses:  # Check if there are new pulses
             print("INFO: pulse received")
@@ -511,6 +529,7 @@ def main():
                     if hex_code == value["code"]:
                         print(f"Key pressed: {key}")
                         value["function"]()  # Call the associated function
+                        save_settings()
                         
             last_num_pulses = 0
 
@@ -519,10 +538,13 @@ def main():
             asyncio.run(update_temp())
             last_temp_update = current_time
         
-        # Save settings only every 6 seconds.
-        if current_time - last_save > 6:
-            save_settings()
-            last_save = current_time
+#         # Save settings only every 6 seconds.
+#         if current_time - last_save > 6:
+#             save_settings()
+#             last_save = current_time
+        
+        if current_time - last_interaction > 3:
+            display.contrast(10)
 
 # Check for the existence of settings.json.
 try:
